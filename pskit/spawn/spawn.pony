@@ -28,16 +28,38 @@ interface PSKitSpawnNotify
       end
     end
 
-actor PSKitSpawn
-  let notify: PSKitSpawnNotify iso
-
+class PSKitSpawn
   new create(
     auth: AmbientAuth,
     notify': PSKitSpawnNotify iso,
     file': String,
     args': (Seq[String] val | None) = None,
-    vars': (Seq[String] val | None) = None
-  ) =>
+    vars': (Seq[String] val | None) = None) ?
+  =>
+    match sanitize_command_name(file')
+    | let file: String =>
+      _PSKitSpawn(consume notify', file, args', vars')
+    else
+      error
+    end
+
+  fun sanitize_command_name(file: String): (String | None) =>
+    var out = Path.clean(file)
+    if out == "." then
+      None
+    else
+      out
+    end
+
+actor _PSKitSpawn
+  let notify: PSKitSpawnNotify iso
+
+  new create(
+    notify': PSKitSpawnNotify iso,
+    file': String,
+    args': (Seq[String] val | None) = None,
+    vars': (Seq[String] val | None) = None)
+  =>
     notify = consume notify'
 
     let file = file'
