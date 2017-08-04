@@ -11,3 +11,6 @@
 
 # Debug files
 *.pdb
+
+testbin/checkenv
+testbin/hello

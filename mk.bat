@@ -22,13 +22,13 @@ exit /b
 
 :clean
 del /q bin\*.*
-del /q bin\checkenv.*
-del /q bin\hello.*
+del /q testbin\checkenv.*
+del /q testbin\hello.*
 exit /b
 
 :stub
-ponyc -o testbin -d testbin\checkenv
-ponyc -o testbin -d testbin\hello
+ponyc -o testbin -d stub\checkenv
+ponyc -o testbin -d stub\hello
 exit /b
 
 :test
