@@ -41,7 +41,7 @@ actor Main
       TestNotify(env.out),
       "git", // command
       recover ["--version"] end, // arg
-      recover ["GIT_PAGER=vim] end // env vars
+      recover ["GIT_PAGER=vim"] end // env vars
     )
 ```
 
