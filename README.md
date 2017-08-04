@@ -2,7 +2,7 @@
 
 Work in progress...
 
-Currently it provides following package.
+Currently it provides following package and only work for windows.
 
 ### package `pskit/spawn`
 
@@ -36,5 +36,27 @@ actor Main
       return
     end
 
-    PSKitSpawn(auth, TestNotify(env.out), "git", recover ["--version"] end)
+    PSKitSpawn(
+      auth,
+      TestNotify(env.out),
+      "git", // command
+      recover ["--version"] end, // arg
+      recover ["GIT_PAGER=vim] end // env vars
+    )
 ```
+
+#### How to run tests
+
+You can use `mk.bat`.
+
+    > mk stub
+
+then
+
+    > mk test
+
+or
+
+    > mk test seq
+
+to let test cases run sequentially.
