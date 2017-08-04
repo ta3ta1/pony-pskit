@@ -11,6 +11,14 @@ use @_wspawnvpe[I64](
   file: Pointer[U8] tag,
   args: Pointer[Pointer[U8] tag] tag,
   vars: Pointer[Pointer[U8] tag] tag) if windows
+use @posix_spawnp[I32](
+  pid: Pointer[I32] tag,
+  file: Pointer[U8] tag,
+  actions: Pointer[U8] tag,
+  attr: Pointer[U8] tag,
+  args: Pointer[Pointer[U8] tag] tag,
+  vars: Pointer[Pointer[U8] tag] tag) if posix
+use @waitpid[I32](pid: I32, wstatus: Pointer[I32] tag, options: I32) if posix
 use @pony_os_errno[I32]()
 
 interface PSKitSpawnNotify
@@ -152,8 +160,39 @@ actor _PSKitSpawn
       notify.opened()
 
       _wait(ret_spawn)
+    elseif posix then
+      var pid: I32 = -1
+      let ret_spawn =
+        if vars.size() > 1 then
+          @posix_spawnp(
+            addressof pid, file.cpointer(),
+            nullptr, nullptr,
+            args.cpointer(), vars.cpointer())
+        else
+          let nullptrptr: Pointer[Pointer[U8] tag] tag =
+            Pointer[Pointer[U8] tag]
+          @posix_spawnp(
+            addressof pid, file.cpointer(),
+            nullptr, nullptr,
+            args.cpointer(), nullptrptr)
+        end
+      if ret_spawn != 0 then
+        notify.not_opened(ret_spawn)
+        return
+      end
+
+      notify.opened()
+
+      _wait(pid.i64())
     else
       compile_error "unsupported platform"
+    end
+
+  fun _extract_exitcode(wstatus: I32): I32 ? =>
+    if (wstatus and 0x7f) == 0 then
+      (wstatus >> 8) and 0xff
+    else
+      error
     end
 
   be _wait(pid: I64) =>
@@ -164,6 +203,19 @@ actor _PSKitSpawn
         notify.abended(@pony_os_errno())
       else
         notify.finished(exitcode)
+      end
+    elseif posix then
+      var wstatus: I32 = 0
+      let ret_waitpid = @waitpid(pid.i32(), addressof wstatus, 0)
+      if ret_waitpid == -1 then
+        notify.abended(@pony_os_errno())
+      else
+        try
+          let exitcode = _extract_exitcode(wstatus)?
+          notify.finished(exitcode)
+        else
+          notify.abended(4) // roughly pass EINTR
+        end
       end
     else
       compile_error "unsupported platform"
