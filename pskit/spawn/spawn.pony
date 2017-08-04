@@ -1,11 +1,12 @@
 use "files"
+use ".."
 use @_cwait[I64](
   exitcode: Pointer[I32] tag, handle: I64, action: I32) if windows
-use @_spawnvp[I64](
+use @_wspawnvp[I64](
   mode: I32,
   file: Pointer[U8] tag,
   args: Pointer[Pointer[U8] tag] tag) if windows
-use @_spawnvpe[I64](
+use @_wspawnvpe[I64](
   mode: I32,
   file: Pointer[U8] tag,
   args: Pointer[Pointer[U8] tag] tag,
@@ -36,19 +37,64 @@ class PSKitSpawn
     args': (Seq[String] val | None) = None,
     vars': (Seq[String] val | None) = None) ?
   =>
-    match sanitize_command_name(file')
-    | let file: String =>
-      _PSKitSpawn(consume notify', file, args', vars')
-    else
-      error
-    end
+    let file =
+      match sanitize_command_name(file')
+      | let seq: ByteSeq => seq
+      else
+        error
+      end
 
-  fun sanitize_command_name(file: String): (String | None) =>
-    var out = Path.clean(file)
+    let args =
+      match args'
+      | None => None // no arg
+      | let seq: Seq[String] val =>
+        match sanitize_seq(seq)
+        | let sseq: Seq[ByteSeq] val =>
+          sseq
+        else
+          error
+        end
+      end
+
+    let vars =
+      match vars'
+      | None => None // no vars
+      | let seq: Seq[String] val =>
+        match sanitize_seq(seq)
+        | let sseq: Seq[ByteSeq] val =>
+          sseq
+        else
+          error
+        end
+      end
+
+    _PSKitSpawn(consume notify', file, args, vars)
+
+  fun sanitize_command_name(file: String): (ByteSeq | None) =>
+    let out = Path.clean(file)
     if out == "." then
       None
     else
-      out
+      try
+        OSString.from(out)?
+      else
+        None
+      end
+    end
+
+  fun sanitize_seq(arr: Seq[String] val): (Seq[ByteSeq] val | None) =>
+    recover
+      var out = Array[ByteSeq](arr.size())
+      for e in arr.values() do
+        if e.size() == 0 then continue end // TODO: error?
+
+        try
+          out.push(OSString.from(e)?)
+        else
+          return None
+        end
+      end
+      consume out
     end
 
 actor _PSKitSpawn
@@ -56,9 +102,9 @@ actor _PSKitSpawn
 
   new create(
     notify': PSKitSpawnNotify iso,
-    file': String,
-    args': (Seq[String] val | None) = None,
-    vars': (Seq[String] val | None) = None)
+    file': ByteSeq,
+    args': (Seq[ByteSeq] val | None) = None,
+    vars': (Seq[ByteSeq] val | None) = None)
   =>
     notify = consume notify'
 
@@ -67,11 +113,11 @@ actor _PSKitSpawn
 
     // prepare args
     let args = Array[Pointer[U8] tag](2)
-    args.push(file.cstring())
+    args.push(file.cpointer())
     match args'
-    | let seq: Seq[String] val =>
+    | let seq: Seq[ByteSeq] val =>
       for arg in seq.values() do
-        args.push(arg.cstring())
+        args.push(arg.cpointer())
       end
     end
     args.push(nullptr)
@@ -79,22 +125,23 @@ actor _PSKitSpawn
     // prepare env vars
     let vars = Array[Pointer[U8] tag](1)
     match vars'
-    | let seq: Seq[String] val =>
+    | let seq: Seq[ByteSeq] val =>
       for var1 in seq.values() do
-        vars.push(var1.cstring())
+        vars.push(var1.cpointer())
       end
     end
     vars.push(nullptr)
 
+    // spawn
     ifdef windows then
       let mode = I32(1) // _P_NOWAIT
       let ret_spawn =
         if vars.size() > 1 then
-          @_spawnvpe(
-            mode, file.cstring(), args.cpointer(), vars.cpointer())
+          @_wspawnvpe(
+            mode, file.cpointer(), args.cpointer(), vars.cpointer())
         else
-          @_spawnvp(
-            mode, file.cstring(), args.cpointer())
+          @_wspawnvp(
+            mode, file.cpointer(), args.cpointer())
         end
       if ret_spawn == -1 then
         let errno = @pony_os_errno()

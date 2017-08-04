@@ -9,6 +9,7 @@ actor Main is TestList
     test(PSKitSpawnMalformedCommandTest)
     test(PSKitSpawnNotFoundTest)
     test(PSKitSpawnBasicTest)
+    test(PSKitSpawnMultiByteTest)
 
 class iso PSKitSpawnMalformedCommandTest is UnitTest
   fun name(): String => "pskit/spawn.PSKitSpawn.MalformedCommand"
@@ -111,6 +112,94 @@ class iso PSKitSpawnBasicTest is UnitTest
     h.expect_action("checkenv.has_env_key")
     h.expect_action("checkenv.has_env_val")
     h.expect_action("checkenv.has_env_diffval")
+    h.long_test(5_000_000_000) // 5sec
+
+  fun ref timed_out(h: TestHelper) =>
+    h.complete(false)
+
+class iso PSKitSpawnMultiByteTest is UnitTest
+  fun name(): String => "pskit/spawn.PSKitSpawn.MultiByte"
+
+  fun apply(h: TestHelper) ? =>
+    // just run
+    PSKitSpawn(
+      h.env.root as AmbientAuth,
+      object iso is PSKitSpawnNotify
+        fun opened() =>
+          h.complete_action("hello_mb")
+        fun not_opened(errno: I32) =>
+          h.fail_action("hello_mb")
+        fun finished(exitcode: I32) =>
+          h.assert_eq[I32](0, exitcode)
+      end,
+      "testbin/こんにちは"
+    )?
+
+    // arg/env
+    PSKitSpawn(
+      h.env.root as AmbientAuth,
+      object iso is PSKitSpawnNotify
+        fun opened() =>
+          h.complete_action("checkenv_mb.no_env")
+        fun not_opened(errno: I32) =>
+          h.fail_action("checkenv_mb.no_env")
+        fun finished(exitcode: I32) =>
+          h.assert_eq[I32](1, exitcode)
+      end,
+      "testbin/checkenv",
+      recover ["PSKIT_SPAWN_テスト"] end
+    )?
+
+    PSKitSpawn(
+      h.env.root as AmbientAuth,
+      object iso is PSKitSpawnNotify
+        fun opened() =>
+          h.complete_action("checkenv_mb.has_env_key")
+        fun not_opened(errno: I32) =>
+          h.fail_action("checkenv_mb.has_env_key")
+        fun finished(exitcode: I32) =>
+          h.assert_eq[I32](0, exitcode)
+      end,
+      "testbin/checkenv",
+      recover ["PSKIT_SPAWN_テスト"] end,
+      recover ["PSKIT_SPAWN_テスト=値A"] end
+    )?
+
+    PSKitSpawn(
+      h.env.root as AmbientAuth,
+      object iso is PSKitSpawnNotify
+        fun opened() =>
+          h.complete_action("checkenv_mb.has_env_val")
+        fun not_opened(errno: I32) =>
+          h.fail_action("checkenv_mb.has_env_val")
+        fun finished(exitcode: I32) =>
+          h.assert_eq[I32](0, exitcode)
+      end,
+      "testbin/checkenv",
+      recover ["PSKIT_SPAWN_テスト"; "値A"] end,
+      recover ["PSKIT_SPAWN_テスト=値A"] end
+    )?
+
+    PSKitSpawn(
+      h.env.root as AmbientAuth,
+      object iso is PSKitSpawnNotify
+        fun opened() =>
+          h.complete_action("checkenv_mb.has_env_diffval")
+        fun not_opened(errno: I32) =>
+          h.fail_action("checkenv_mb.has_env_diffval")
+        fun finished(exitcode: I32) =>
+          h.assert_eq[I32](1, exitcode)
+      end,
+      "testbin/checkenv",
+      recover ["PSKIT_SPAWN_テスト"; "値A"] end,
+      recover ["PSKIT_SPAWN_テスト=値B"] end
+    )?
+
+    h.expect_action("hello_mb")
+    h.expect_action("checkenv_mb.no_env")
+    h.expect_action("checkenv_mb.has_env_key")
+    h.expect_action("checkenv_mb.has_env_val")
+    h.expect_action("checkenv_mb.has_env_diffval")
     h.long_test(5_000_000_000) // 5sec
 
   fun ref timed_out(h: TestHelper) =>

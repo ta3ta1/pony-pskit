@@ -1,4 +1,13 @@
-bin/
-testbin/
-!testbin/checkenv/
-!testbin/hello/
+# Linker output
+*.ilk
+*.map
+*.exp
+
+# Libraries
+*.lib
+
+# Executables
+*.exe
+
+# Debug files
+*.pdb
